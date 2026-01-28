@@ -67,13 +67,16 @@ module system_controller #(
     // =========================================================================
     output reg  [14:0] ws_weight_base,
     output reg  [14:0] ws_bias_base,
-    output reg  [5:0]  ws_out_channels,
+    output reg  [9:0]  ws_out_channels,       // Widened for FC (512)
+    output reg  [9:0]  ws_num_biases,         // Actual bias count
     output reg  [9:0]  ws_weights_per_filter,
     output reg  ws_start_bias,
+    output reg  ws_start_cache,        // NEW: Start cache loading
     output reg  ws_start_stream,
     output reg  ws_stop_stream,
     output reg  ws_next_group,
     input  wire ws_bias_done,
+    input  wire ws_cache_done,         // NEW: Cache load complete
     input  wire ws_stream_ready,
     input  wire ws_group_done,
     
@@ -150,6 +153,8 @@ module system_controller #(
     localparam S_GEN_START      = 5'd1;
     localparam S_LOAD_BIAS      = 5'd2;
     localparam S_WAIT_BIAS      = 5'd3;
+    localparam S_FC_CACHE       = 5'd27;  // NEW: Load FC weights to cache
+    localparam S_FC_WAIT_CACHE  = 5'd28;  // NEW: Wait for FC cache load
     localparam S_FC_START       = 5'd4;
     localparam S_FC_PROCESS     = 5'd5;
     localparam S_FC_WAIT_DONE   = 5'd6;
@@ -157,6 +162,8 @@ module system_controller #(
     localparam S_CONV_SETUP     = 5'd8;
     localparam S_CONV_BIAS      = 5'd9;
     localparam S_CONV_WAIT_BIAS = 5'd10;
+    localparam S_CONV_CACHE     = 5'd25;  // NEW: Load weights to cache
+    localparam S_CONV_WAIT_CACHE = 5'd26; // NEW: Wait for cache load
     localparam S_CONV_START     = 5'd11;
     localparam S_CONV_PROCESS   = 5'd12;
     localparam S_CONV_WAIT_DONE = 5'd13;
@@ -220,6 +227,7 @@ module system_controller #(
             ws_weight_base <= 0;
             ws_bias_base <= 0;
             ws_out_channels <= 0;
+            ws_num_biases <= 0;
             ws_weights_per_filter <= 0;
             pe_img_width <= 0;
             pe_img_height <= 0;
@@ -250,6 +258,7 @@ module system_controller #(
             inference_done <= 0;
             fc_start <= 0;
             ws_start_bias <= 0;
+            ws_start_cache <= 0;
             ws_start_stream <= 0;
             ws_stop_stream <= 0;
             ws_next_group <= 0;
@@ -289,7 +298,9 @@ module system_controller #(
                     
                     ws_weight_base <= weight_base;
                     ws_bias_base <= bias_base;
-                    ws_out_channels <= out_channels;
+                    // FC layer: need to cache ALL 512 outputs' weights
+                    ws_out_channels <= fc_output_len;
+                    ws_num_biases <= {4'd0, out_channels};  // 32 biases for FC
                     ws_weights_per_filter <= fc_input_len;
                     
                     total_output_groups <= fc_output_len / ARRAY_SIZE;
@@ -307,12 +318,24 @@ module system_controller #(
                 S_WAIT_BIAS: begin
                     if (ws_bias_done) begin
                         if (gen_layer_count == 0) begin
-                            state <= S_FC_START;
-                            $display("[CTRL] FC: Bias loaded, starting process");
+                            state <= S_FC_CACHE;
+                            $display("[CTRL] FC: Bias loaded, loading cache");
                         end else begin
                             state <= S_CONV_START;
                             $display("[CTRL] Conv: Bias loaded, starting process");
                         end
+                    end
+                end
+                
+                S_FC_CACHE: begin
+                    ws_start_cache <= 1;
+                    state <= S_FC_WAIT_CACHE;
+                end
+                
+                S_FC_WAIT_CACHE: begin
+                    if (ws_cache_done) begin
+                        state <= S_FC_START;
+                        $display("[CTRL] FC: Cache loaded, starting process");
                     end
                 end
                 
@@ -403,13 +426,16 @@ module system_controller #(
                     
                     if (gen_layer_count == 4) begin
                         output_mux_sel <= 2'd1;
+                        $display("[CTRL] Conv L4: OUTPUT TO FRAMEBUFFER (mux_sel=1)");
                     end else begin
                         output_mux_sel <= 2'd0;
+                        $display("[CTRL] Conv L%0d: output to RAM (mux_sel=0)", gen_layer_count);
                     end
                     
                     ws_weight_base <= weight_base;
                     ws_bias_base <= bias_base;
                     ws_out_channels <= out_channels;
+                    ws_num_biases <= {4'd0, out_channels};
                     ws_weights_per_filter <= ({7'd0, kernel_size} * {7'd0, kernel_size}) * {4'd0, in_channels};
                     
                     pe_img_width <= in_size;
@@ -454,8 +480,28 @@ module system_controller #(
                 
                 S_CONV_WAIT_BIAS: begin
                     if (ws_bias_done) begin
+                        state <= S_CONV_CACHE;  // Go to cache loading
+                        if (layer_id >= 5) begin
+                            $display("[CTRL] Disc L%0d: Bias done, loading cache", disc_layer_count);
+                        end else begin
+                            $display("[CTRL] Conv L%0d: Bias done, loading cache", gen_layer_count);
+                        end
+                    end
+                end
+                
+                S_CONV_CACHE: begin
+                    ws_start_cache <= 1;
+                    state <= S_CONV_WAIT_CACHE;
+                end
+                
+                S_CONV_WAIT_CACHE: begin
+                    if (ws_cache_done) begin
                         state <= S_CONV_START;
-                        $display("[CTRL] Conv L%0d: Bias done", gen_layer_count);
+                        if (layer_id >= 5) begin
+                            $display("[CTRL] Disc L%0d: Cache loaded", disc_layer_count);
+                        end else begin
+                            $display("[CTRL] Conv L%0d: Cache loaded", gen_layer_count);
+                        end
                     end
                 end
                 
@@ -622,10 +668,18 @@ module system_controller #(
                             disc_layer_count, in_channels, out_channels, in_size, out_size, 
                             kernel_size, stride);
                     
+                    // Output routing: final layer (D_L3) goes to discriminator result
+                    if (disc_layer_count == 3) begin
+                        output_mux_sel <= 2'd2;  // To discriminator result register
+                    end else begin
+                        output_mux_sel <= 2'd0;  // To RAM
+                    end
+                    
                     // Weight streamer config
                     ws_weight_base <= weight_base;
                     ws_bias_base <= bias_base;
                     ws_out_channels <= out_channels;
+                    ws_num_biases <= {4'd0, out_channels};
                     ws_weights_per_filter <= ({7'd0, kernel_size} * {7'd0, kernel_size}) * {4'd0, in_channels};
                     
                     // Patch extractor config

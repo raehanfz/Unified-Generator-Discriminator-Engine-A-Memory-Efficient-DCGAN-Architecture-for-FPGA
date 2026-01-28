@@ -63,6 +63,20 @@ module output_mux #(
     assign m0_axis_tvalid = (sel == 2'd0) ? s_axis_tvalid : 1'b0;
     assign m1_axis_tvalid = (sel == 2'd1) ? s_axis_tvalid : 1'b0;
     
+    // Debug: track framebuffer writes
+    reg [15:0] fb_write_cnt;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            fb_write_cnt <= 0;
+        end else begin
+            if (sel == 2'd1 && s_axis_tvalid && m1_axis_tready) begin
+                fb_write_cnt <= fb_write_cnt + 1;
+                if (fb_write_cnt < 4 || fb_write_cnt >= 3068)
+                    $display("[OMUX] FB write %0d: val=%0d", fb_write_cnt, $signed(s_axis_tdata));
+            end
+        end
+    end
+    
     // =========================================================================
     // READY ROUTING (only selected output's ready propagates back)
     // =========================================================================
@@ -73,19 +87,21 @@ module output_mux #(
     
     // =========================================================================
     // DISCRIMINATOR OUTPUT CAPTURE
+    // Latches the result - stays valid until next inference starts
     // =========================================================================
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             disc_result       <= 0;
             disc_result_valid <= 0;
         end else begin
-            // Clear valid after one cycle (pulse)
-            disc_result_valid <= 0;
-            
+            // Capture and latch when discriminator result arrives
             if (sel == 2'd2 && s_axis_tvalid) begin
                 disc_result       <= s_axis_tdata;
                 disc_result_valid <= 1;
+                $display("[DISC] Captured result: %0d (0x%04h)", $signed(s_axis_tdata), s_axis_tdata);
             end
+            // Note: disc_result_valid stays high until reset
+            // In real usage, controller would clear it when starting new inference
         end
     end
 

@@ -14,7 +14,7 @@
 // Include modules
 `include "noise_generator.v"
 `include "weight_rom.v"
-`include "weight_streamer.v"
+`include "weight_streamer_cached.v"
 `include "fc_layer_handler.v"
 `include "layer_config_rom.v"
 `include "input_mux.v"
@@ -50,11 +50,17 @@ module system_top_level #(
     output wire [4:0] controller_state,
     
     // =========================================================================
-    // OUTPUT (from framebuffer)
+    // OUTPUT (from framebuffer - 32x32x3 = 3072 pixels)
     // =========================================================================
-    input  wire [9:0] fb_rd_addr,
+    input  wire [11:0] fb_rd_addr,           // 12-bit for 3072 entries
     output wire [DATA_WIDTH-1:0] fb_rd_data,
     output wire frame_ready,
+    
+    // =========================================================================
+    // DISCRIMINATOR OUTPUT
+    // =========================================================================
+    output wire [DATA_WIDTH-1:0] disc_result,
+    output wire disc_result_valid,
     
     // =========================================================================
     // DEBUG SIGNALS
@@ -104,9 +110,11 @@ module system_top_level #(
     wire        ctrl_fc_start;
     wire [14:0] ctrl_ws_weight_base;
     wire [14:0] ctrl_ws_bias_base;
-    wire [5:0]  ctrl_ws_out_channels;
+    wire [9:0]  ctrl_ws_out_channels;     // Widened for FC (512)
+    wire [9:0]  ctrl_ws_num_biases;       // Actual bias count
     wire [9:0]  ctrl_ws_weights_per_filter;
     wire        ctrl_ws_start_bias;
+    wire        ctrl_ws_start_cache;
     wire        ctrl_ws_start_stream;
     wire        ctrl_ws_stop_stream;
     wire        ctrl_ws_next_group;
@@ -159,6 +167,7 @@ module system_top_level #(
     wire ws_stream_ready_int;
     wire ws_group_done_int;
     wire ws_bias_done_int;
+    wire ws_cache_done_int;
     wire signed [(ARRAY_SIZE*DATA_WIDTH)-1:0] ws_weights_out;
     wire ws_weights_valid;
     wire signed [(ARRAY_SIZE*DATA_WIDTH)-1:0] ws_bias_out;
@@ -322,12 +331,15 @@ module system_top_level #(
         .ws_weight_base         (ctrl_ws_weight_base),
         .ws_bias_base           (ctrl_ws_bias_base),
         .ws_out_channels        (ctrl_ws_out_channels),
+        .ws_num_biases          (ctrl_ws_num_biases),
         .ws_weights_per_filter  (ctrl_ws_weights_per_filter),
         .ws_start_bias          (ctrl_ws_start_bias),
+        .ws_start_cache         (ctrl_ws_start_cache),
         .ws_start_stream        (ctrl_ws_start_stream),
         .ws_stop_stream         (ctrl_ws_stop_stream),
         .ws_next_group          (ctrl_ws_next_group),
         .ws_bias_done           (ws_bias_done_int),
+        .ws_cache_done          (ws_cache_done_int),
         .ws_stream_ready        (ws_stream_ready_int),
         .ws_group_done          (ws_group_done_int),
         
@@ -409,12 +421,13 @@ module system_top_level #(
     );
 
     // =========================================================================
-    // WEIGHT STREAMER
+    // WEIGHT STREAMER (with cache)
     // =========================================================================
-    weight_streamer #(
+    weight_streamer_cached #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(15),
-        .ARRAY_SIZE(ARRAY_SIZE)
+        .ARRAY_SIZE(ARRAY_SIZE),
+        .CACHE_DEPTH(12288)  // FC needs 512×24 = 12,288
     ) u_weight_streamer (
         .clk                    (clk),
         .rst_n                  (rst_n),
@@ -422,9 +435,11 @@ module system_top_level #(
         .cfg_weight_base        (ctrl_ws_weight_base),
         .cfg_bias_base          (ctrl_ws_bias_base),
         .cfg_out_channels       (ctrl_ws_out_channels),
+        .cfg_num_biases         (ctrl_ws_num_biases),
         .cfg_weights_per_filter (ctrl_ws_weights_per_filter),
         
         .start_bias             (ctrl_ws_start_bias),
+        .start_cache            (ctrl_ws_start_cache),
         .start_stream           (ctrl_ws_start_stream),
         .stop_stream            (ctrl_ws_stop_stream),
         .next_output_group      (ctrl_ws_next_group),
@@ -443,6 +458,7 @@ module system_top_level #(
         
         .busy                   (ws_busy),
         .bias_done              (ws_bias_done_int),
+        .cache_done             (ws_cache_done_int),
         .stream_ready           (ws_stream_ready_int),
         .group_done             (ws_group_done_int)
     );
@@ -643,8 +659,8 @@ module system_top_level #(
         .m1_axis_tvalid (omux_fb_valid),
         .m1_axis_tready (omux_fb_ready),
         
-        .disc_result    (),
-        .disc_result_valid()
+        .disc_result    (disc_result),
+        .disc_result_valid(disc_result_valid)
     );
 
     // =========================================================================
@@ -683,7 +699,7 @@ module system_top_level #(
         .fb_wr_data         (omux_fb_data),
         .fb_wr_en           (omux_fb_valid),
         
-        .fb_rd_addr         ({2'b0, fb_rd_addr}),
+        .fb_rd_addr         (fb_rd_addr),
         .fb_rd_data         (fb_rd_data),
         .frame_start        (1'b0),
         .frame_ready        (mem_frame_ready),

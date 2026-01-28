@@ -146,6 +146,7 @@ module fc_layer_handler #(
                             input_idx     <= 0;
                             total_outputs <= 0;
                             state         <= S_PROCESS;
+                            $display("[FC] Noise loaded, starting output");
                         end else begin
                             noise_load_idx <= noise_load_idx + 1;
                         end

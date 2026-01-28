@@ -161,9 +161,8 @@ module patch_extractor#(
                         load_count <= 0;
                         total_pixels <= cfg_img_width * cfg_img_height * cfg_in_channels;
                         s_pixel_ready <= 1;  // Ready to receive
-                        $display("[PE] Starting: %0dx%0d x %0d = %0d pixels, k=%0d s=%0d", 
+                        $display("[PE] Starting: %0dx%0d x %0d, k=%0d s=%0d", 
                                 cfg_img_width, cfg_img_height, cfg_in_channels,
-                                cfg_img_width * cfg_img_height * cfg_in_channels,
                                 cfg_kernel_size, cfg_stride);
                     end
                 end
