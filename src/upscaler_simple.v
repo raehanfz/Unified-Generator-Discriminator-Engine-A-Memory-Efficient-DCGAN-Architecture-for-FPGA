@@ -42,6 +42,7 @@ module upscaler_simple #(
     // =========================================================================
     reg dup_phase;  // 0=first output, 1=second output (duplicate)
     reg signed [DATA_WIDTH-1:0] held_data;
+    reg [15:0] ups_out_cnt;  // Debug counter
     
     // =========================================================================
     // BYPASS MODE
@@ -67,12 +68,20 @@ module upscaler_simple #(
             out_valid <= 0;
             dup_phase <= 0;
             held_data <= 0;
+            ups_out_cnt <= 0;
             
         end else if (bypass_mode) begin
             // Simple pass-through
             out_data <= in_data;
             out_valid <= in_valid;
             dup_phase <= 0;
+            
+            // Debug: track output count in bypass mode
+            if (in_valid && out_ready) begin
+                ups_out_cnt <= ups_out_cnt + 1;
+                if (ups_out_cnt < 3)
+                    $display("[UPS] bypass out[%0d] = %0d", ups_out_cnt, $signed(in_data));
+            end
             
         end else begin
             // 2× horizontal duplication

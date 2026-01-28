@@ -73,6 +73,13 @@ module stream_to_ram #(
                         ram_wr_addr <= cfg_start_addr + write_count;
                         ram_wr_data <= s_axis_tdata;
                         ram_wr_en   <= 1;
+                        
+                        // Debug: first 3 and last 3 writes
+                        if (write_count < 3)
+                            $display("[S2R] WR[%0d] = %0d (0x%04h)", write_count, $signed(s_axis_tdata), s_axis_tdata);
+                        else if (write_count >= cfg_length - 3)
+                            $display("[S2R] WR[%0d] = %0d (0x%04h)", write_count, $signed(s_axis_tdata), s_axis_tdata);
+                        
                         write_count <= write_count + 1;
                         
                         if (write_count >= cfg_length - 1) begin

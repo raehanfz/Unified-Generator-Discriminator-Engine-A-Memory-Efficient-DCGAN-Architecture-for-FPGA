@@ -204,6 +204,9 @@ module compute_engine #(
                     if (both_valid) begin
                         state <= S_COMPUTE;
                         
+                        // Debug: first data input
+                        $display("[CE] IN[0] = %0d (0x%04h)", $signed(data_in), data_in);
+                        
                         // First MAC
                         acc[0] <= product_ext[0];
                         acc[1] <= product_ext[1];
@@ -257,6 +260,16 @@ module compute_engine #(
                     endcase
                     
                     if (result_ready) begin
+                        // Debug: first 4 outputs (one group)
+                        if (debug_output_count < 4) begin
+                            case (output_idx)
+                                2'd0: $display("[CE] OUT[%0d] = %0d", debug_output_count, $signed(act_out[0]));
+                                2'd1: $display("[CE] OUT[%0d] = %0d", debug_output_count, $signed(act_out[1]));
+                                2'd2: $display("[CE] OUT[%0d] = %0d", debug_output_count, $signed(act_out[2]));
+                                2'd3: $display("[CE] OUT[%0d] = %0d", debug_output_count, $signed(act_out[3]));
+                            endcase
+                        end
+                        
                         debug_output_count <= debug_output_count + 1;
                         
                         if (output_idx == ARRAY_SIZE - 1) begin
