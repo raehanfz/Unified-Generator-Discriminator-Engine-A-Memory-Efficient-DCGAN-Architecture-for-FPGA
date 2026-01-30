@@ -20,49 +20,36 @@ module input_mux #(
     input  wire clk,
     input  wire rst_n,
     
-    // =========================================================================
     // SELECTION CONTROL
-    // =========================================================================
     input  wire [1:0] sel,  // 0=FC, 1=Patch, 2=Weight
     
-    // =========================================================================
     // SOURCE 0: FC Layer Handler
-    // =========================================================================
     input  wire signed [DATA_WIDTH-1:0] fc_data,
     input  wire                         fc_valid,
     output wire                         fc_ready,
     
-    // =========================================================================
     // SOURCE 1: Patch Extractor
-    // =========================================================================
     input  wire signed [DATA_WIDTH-1:0] patch_data,
     input  wire                         patch_valid,
     output wire                         patch_ready,
     
-    // =========================================================================
     // SOURCE 2: Weight Streamer
-    // =========================================================================
     input  wire signed [DATA_WIDTH-1:0] weight_data,
     input  wire                         weight_valid,
     output wire                         weight_ready,
     input  wire                         weight_load_en,  // Pass through to engine
     
-    // =========================================================================
     // OUTPUT: To Systolic Engine
-    // =========================================================================
     output wire signed [DATA_WIDTH-1:0] out_data,
     output wire                         out_valid,
     input  wire                         out_ready,
     output wire                         out_load_en      // Weight loading mode
 );
 
-    // =========================================================================
     // OUTPUT DATA MUX
-    // =========================================================================
     reg signed [DATA_WIDTH-1:0] mux_data;
     reg                         mux_valid;
     reg                         mux_load_en;
-    
     always @(*) begin
         case (sel)
             2'd0: begin  // FC Layer
@@ -92,9 +79,7 @@ module input_mux #(
     assign out_valid   = mux_valid;
     assign out_load_en = mux_load_en;
     
-    // =========================================================================
     // READY SIGNAL ROUTING
-    // =========================================================================
     // Only the selected source receives the ready signal
     // Non-selected sources see ready = 0 (blocked)
     

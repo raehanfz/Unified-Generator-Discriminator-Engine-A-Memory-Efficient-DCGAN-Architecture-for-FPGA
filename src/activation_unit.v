@@ -25,12 +25,6 @@ module activation_unit #(
     // Q8.8 Constants
     localparam signed [DATA_WIDTH-1:0] MAX_VAL = 16'h7FFF;
     localparam signed [DATA_WIDTH-1:0] MIN_VAL = 16'h8000;
-
-    // --- LOGIC PENJUMLAHAN BIAS ---
-    // Accumulator format: Q(Int).16 (LSB ada di bit 0, bernilai 2^-16)
-    // Bias format:        Q8.8      (LSB ada di bit 0, bernilai 2^-8)
-    // Agar bisa dijumlahkan, Bias harus digeser ke kiri 8 bit (dikali 256).
-    // Structure: [Sign Ext 24-bit] [Bias 16-bit] [Zero Pad 8-bit] = 48-bit
     
     wire signed [ACC_WIDTH-1:0] bias_expanded;
     assign bias_expanded = { {24{bias[DATA_WIDTH-1]}}, bias, 8'd0 };
@@ -39,7 +33,6 @@ module activation_unit #(
     assign data_biased = in_data + bias_expanded;
 
     // --- SLICING & SATURATION (Menggunakan data_biased) ---
-    // Kita mengambil bit [23:8] dari hasil penjumlahan
     wire sign_bit = data_biased[ACC_WIDTH-1];
     wire [24:0] upper_check = data_biased[47:23]; 
     wire signed [DATA_WIDTH-1:0] sliced_val = data_biased[23:8];
@@ -59,7 +52,6 @@ module activation_unit #(
     end
 
     // --- PIPELINED OUTPUT REGISTER ---
-    // Latency = 1 Clock Cycle
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             out_data  <= 0;

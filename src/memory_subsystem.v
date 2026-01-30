@@ -25,9 +25,7 @@ module memory_subsystem #(
     input  wire clk,
     input  wire rst_n,
     
-    // =========================================================================
     // RAM-TO-STREAM INTERFACE (Read feature maps)
-    // =========================================================================
     input  wire [11:0] r2s_start_addr,
     input  wire [11:0] r2s_length,
     input  wire [11:0] r2s_row_length,   // Row length for vertical repeat
@@ -40,9 +38,7 @@ module memory_subsystem #(
     output wire        r2s_valid,
     input  wire        r2s_ready,
     
-    // =========================================================================
     // STREAM-TO-RAM INTERFACE (Write feature maps)
-    // =========================================================================
     input  wire [10:0] s2r_start_addr,
     input  wire [10:0] s2r_length,
     input  wire        s2r_start,
@@ -52,9 +48,7 @@ module memory_subsystem #(
     input  wire        s2r_valid,
     output wire        s2r_ready,
     
-    // =========================================================================
     // OUTPUT FRAMEBUFFER INTERFACE
-    // =========================================================================
     input  wire [11:0] fb_wr_addr,
     input  wire [DATA_WIDTH-1:0] fb_wr_data,
     input  wire        fb_wr_en,
@@ -63,9 +57,7 @@ module memory_subsystem #(
     input  wire        frame_start,
     output wire        frame_ready,
     
-    // =========================================================================
     // BANK CONTROLLER INTERFACE
-    // =========================================================================
     input  wire [2:0]  current_layer,
     input  wire        layer_start,
     input  wire        layer_done,
@@ -73,15 +65,11 @@ module memory_subsystem #(
     output wire        bank_switch_ready,
     output wire        bank_switched,
     
-    // =========================================================================
     // STATUS
-    // =========================================================================
     output wire [1:0]  pingpong_status
 );
 
-    // =========================================================================
     // INTERNAL SIGNALS
-    // =========================================================================
     
     // Pingpong RAM internal connections
     wire [10:0] pp_rd_addr;
@@ -100,10 +88,8 @@ module memory_subsystem #(
     // Muxed read data (select between pingpong and framebuffer)
     wire [DATA_WIDTH-1:0] muxed_rd_data;
     assign muxed_rd_data = r2s_from_fb ? fb_stream_rd_data : pp_rd_data;
-
-    // =========================================================================
-    // PINGPONG RAM
-    // =========================================================================
+    
+    // PINGPONG RAM    
     pingpong_ram #(
         .DATA_WIDTH(DATA_WIDTH),
         .DEPTH(FEATURE_DEPTH),
@@ -120,9 +106,7 @@ module memory_subsystem #(
         .bank_status(pingpong_status)
     );
 
-    // =========================================================================
     // RAM TO STREAM (Read from pingpong RAM or framebuffer)
-    // =========================================================================
     wire [11:0] r2s_rd_addr_wide;  // 12-bit for framebuffer
     
     ram_to_stream #(
@@ -148,10 +132,8 @@ module memory_subsystem #(
     // Connect addresses to appropriate memories
     assign pp_rd_addr = r2s_rd_addr_wide[10:0];
     assign fb_stream_rd_addr = r2s_rd_addr_wide;
-
-    // =========================================================================
-    // STREAM TO RAM (Write to pingpong RAM)
-    // =========================================================================
+    
+    // STREAM TO RAM (Write to pingpong RAM)    
     stream_to_ram #(
         .DATA_WIDTH(DATA_WIDTH),
         .ADDR_WIDTH(11)
@@ -171,9 +153,7 @@ module memory_subsystem #(
         .ram_wr_en(pp_wr_en)
     );
 
-    // =========================================================================
-    // OUTPUT FRAMEBUFFER (for discriminator input)
-    // =========================================================================
+    // OUTPUT FRAMEBUFFER (for discriminator input)    
     output_framebuffer #(
         .DATA_WIDTH(DATA_WIDTH),
         .IMG_SIZE(32),
@@ -195,9 +175,7 @@ module memory_subsystem #(
     // External read data comes from framebuffer
     assign fb_rd_data = fb_stream_rd_data;
 
-    // =========================================================================
-    // BANK CONTROLLER
-    // =========================================================================
+    // BANK CONTROLLER    
     bank_controller #(
         .NUM_LAYERS(4)
     ) u_bank_controller (
@@ -211,7 +189,5 @@ module memory_subsystem #(
         .bank_switched(bank_switched),
         .layer_sequence()
     );
-
     assign active_bank = active_bank_internal;
-
 endmodule

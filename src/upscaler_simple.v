@@ -37,31 +37,24 @@ module upscaler_simple #(
     input  wire                         out_ready
 );
 
-    // =========================================================================
-    // SIMPLE STATE: just track if we're on first or second output of a pixel
-    // =========================================================================
+    // SIMPLE STATE: just track if we're on first or second output of a pixel    
     reg dup_phase;  // 0=first output, 1=second output (duplicate)
     reg signed [DATA_WIDTH-1:0] held_data;
     reg [15:0] ups_out_cnt;  // Debug counter
     
-    // =========================================================================
     // BYPASS MODE
-    // =========================================================================
     wire bypass_mode;
     assign bypass_mode = bypass;
     
-    // =========================================================================
     // HANDSHAKING
-    // =========================================================================
     // In bypass: pass-through handshake
     // In upsample: only ready when we've output the duplicate (dup_phase=1) or idle
     assign in_ready = bypass_mode ? out_ready : 
                       (dup_phase == 0) ? (out_ready && out_valid) || !out_valid : 
                       out_ready;
     
-    // =========================================================================
+    
     // STATE MACHINE
-    // =========================================================================
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             out_data <= 0;
@@ -116,5 +109,4 @@ module upscaler_simple #(
             end
         end
     end
-
 endmodule

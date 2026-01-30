@@ -20,12 +20,6 @@
  *     Address 28247-28766: D_L1 (Conv 4→8) 520 params
  *     Address 28767-30830: D_L2 (Conv 8→16) 2,064 params
  *     Address 30831-31087: D_L3 (Conv 16→1) 257 params
- * 
- *   RESERVED (31088-32767):
- *     Unused (912 params headroom)
- * 
- * Note: Weights are exported from Python training script in .mem format
- *       Use $readmemh() to load from combined_weights.mem file
  */
 
 module weight_rom #(

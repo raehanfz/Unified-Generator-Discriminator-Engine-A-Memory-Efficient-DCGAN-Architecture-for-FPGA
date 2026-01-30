@@ -1,8 +1,7 @@
 /*
  * Compute Engine (Simple Version)
  * 
- * Purpose: Perform actual MAC operations for DCGAN inference
- *          Replaces systolic_engine_stub with real computation
+ * Purpose: Perform MAC operations for DCGAN inference
  * 
  * Architecture:
  *   - 4 parallel MAC units (matches ARRAY_SIZE=4)
@@ -37,45 +36,35 @@ module compute_engine #(
     input  wire clk,
     input  wire rst_n,
     
-    // =========================================================================
+    
     // CONFIGURATION
-    // =========================================================================
     input  wire        mode_discriminator,  // 0=Generator, 1=Discriminator
     input  wire [9:0]  acc_limit,           // MACs per output (24 for FC, K²×C for conv)
     input  wire signed [(ARRAY_SIZE*DATA_WIDTH)-1:0] bias_in,  // 4 biases packed
     input  wire [1:0]  activation_mode,     // 0=Linear, 1=ReLU, 2=LeakyReLU
     
-    // =========================================================================
     // DATA INPUT (from input_mux)
-    // =========================================================================
     input  wire signed [DATA_WIDTH-1:0] data_in,
     input  wire                         data_valid,
     output wire                         data_ready,
     
-    // =========================================================================
     // WEIGHT INPUT (from weight_streamer)
-    // =========================================================================
     input  wire signed [(ARRAY_SIZE*DATA_WIDTH)-1:0] weights_in,
     input  wire                                      weights_valid,
     
-    // =========================================================================
     // OUTPUT (to output_mux)
-    // =========================================================================
     output reg  signed [DATA_WIDTH-1:0] result_out,
     output reg                          result_valid,
     input  wire                         result_ready,
     
-    // =========================================================================
     // STATUS & DEBUG
-    // =========================================================================
     output wire busy,
     output reg  [31:0] debug_mac_count,
     output reg  [31:0] debug_output_count
 );
 
-    // =========================================================================
+    
     // STATE MACHINE
-    // =========================================================================
     localparam S_IDLE       = 3'd0;
     localparam S_COMPUTE    = 3'd1;
     localparam S_ACTIVATE   = 3'd2;
@@ -84,38 +73,28 @@ module compute_engine #(
     
     reg [2:0] state;
     
-    // =========================================================================
     // COUNTERS
-    // =========================================================================
     reg [9:0]  mac_count;       // Current MAC (0 to acc_limit-1)
     reg [1:0]  output_idx;      // Which output being sent (0-3)
     
-    // =========================================================================
     // ACCUMULATORS (48-bit to handle overflow)
-    // =========================================================================
     reg signed [ACC_WIDTH-1:0] acc [0:ARRAY_SIZE-1];
     
-    // =========================================================================
     // WEIGHT UNPACKING
-    // =========================================================================
     wire signed [DATA_WIDTH-1:0] w [0:ARRAY_SIZE-1];
     assign w[0] = weights_in[DATA_WIDTH-1:0];
     assign w[1] = weights_in[2*DATA_WIDTH-1:DATA_WIDTH];
     assign w[2] = weights_in[3*DATA_WIDTH-1:2*DATA_WIDTH];
     assign w[3] = weights_in[4*DATA_WIDTH-1:3*DATA_WIDTH];
     
-    // =========================================================================
     // BIAS UNPACKING
-    // =========================================================================
     wire signed [DATA_WIDTH-1:0] b [0:ARRAY_SIZE-1];
     assign b[0] = bias_in[DATA_WIDTH-1:0];
     assign b[1] = bias_in[2*DATA_WIDTH-1:DATA_WIDTH];
     assign b[2] = bias_in[3*DATA_WIDTH-1:2*DATA_WIDTH];
     assign b[3] = bias_in[4*DATA_WIDTH-1:3*DATA_WIDTH];
     
-    // =========================================================================
     // MAC PRODUCTS (32-bit, sign-extended to 48-bit)
-    // =========================================================================
     wire signed [31:0] product [0:ARRAY_SIZE-1];
     wire signed [ACC_WIDTH-1:0] product_ext [0:ARRAY_SIZE-1];
     
@@ -127,9 +106,7 @@ module compute_engine #(
         end
     endgenerate
     
-    // =========================================================================
     // ACTIVATION UNITS (4 parallel)
-    // =========================================================================
     reg  act_trigger;
     wire signed [DATA_WIDTH-1:0] act_out [0:ARRAY_SIZE-1];
     wire act_valid [0:ARRAY_SIZE-1];
@@ -152,22 +129,16 @@ module compute_engine #(
         end
     endgenerate
     
-    // =========================================================================
     // HANDSHAKING
-    // =========================================================================
     wire both_valid;
     assign both_valid = data_valid && weights_valid;
     
     // Ready only when computing AND weights available
     assign data_ready = ((state == S_COMPUTE) || (state == S_IDLE)) && weights_valid;
-    
     assign busy = (state != S_IDLE);
     
-    // =========================================================================
     // MAIN STATE MACHINE
-    // =========================================================================
     integer i;
-    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= S_IDLE;
@@ -190,7 +161,6 @@ module compute_engine #(
             act_trigger <= 0;
             
             case (state)
-                // ---------------------------------------------------------
                 S_IDLE: begin
                     mac_count <= 0;
                     output_idx <= 0;
@@ -217,7 +187,6 @@ module compute_engine #(
                     end
                 end
                 
-                // ---------------------------------------------------------
                 S_COMPUTE: begin
                     if (both_valid) begin
                         // Accumulate
@@ -237,7 +206,6 @@ module compute_engine #(
                     end
                 end
                 
-                // ---------------------------------------------------------
                 S_ACTIVATE: begin
                     // Wait 1 cycle for activation pipeline
                     // Activation units have 1-cycle latency
@@ -247,7 +215,6 @@ module compute_engine #(
                     end
                 end
                 
-                // ---------------------------------------------------------
                 S_OUTPUT: begin
                     // Output activated results sequentially
                     result_valid <= 1;
@@ -281,7 +248,6 @@ module compute_engine #(
                     end
                 end
                 
-                // ---------------------------------------------------------
                 S_NEXT: begin
                     // Reset for next group
                     mac_count <= 0;

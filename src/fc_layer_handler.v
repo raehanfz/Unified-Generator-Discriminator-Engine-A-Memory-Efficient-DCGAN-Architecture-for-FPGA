@@ -24,51 +24,40 @@
 
 module fc_layer_handler #(
     parameter DATA_WIDTH   = 16,
-    parameter INPUT_LEN    = 24,    // Latent vector size (nz)
+    parameter INPUT_LEN    = 24,    
     parameter OUTPUT_LEN   = 512,   // Output features (ngf*4 * 4 * 4)
     parameter ARRAY_SIZE   = 4
 )(
     input  wire clk,
     input  wire rst_n,
     
-    // =========================================================================
     // NOISE INPUT (from noise_generator)
-    // =========================================================================
     input  wire signed [DATA_WIDTH-1:0] noise_data,
     input  wire                         noise_valid,
     output wire                         noise_ready,
     
-    // =========================================================================
     // CONTROL
-    // =========================================================================
     input  wire start,              // Pulse to begin FC layer processing
     output reg  busy,
     output reg  done,
     
-    // =========================================================================
     // TO SYSTOLIC ENGINE
-    // =========================================================================
     output reg  signed [DATA_WIDTH-1:0] fc_data_out,
     output reg                          fc_valid_out,
     input  wire                         fc_ready_in,
     
-    // =========================================================================
     // CONFIGURATION (tells engine this is FC mode)
-    // =========================================================================
     output reg                          fc_mode_active
 );
 
-    // =========================================================================
+    
     // NOISE BUFFER
-    // =========================================================================
     // Store all 24 noise values so we can replay them 128 times
     reg signed [DATA_WIDTH-1:0] noise_buffer [0:INPUT_LEN-1];
     reg [4:0] noise_load_idx;
     reg       noise_loaded;
     
-    // =========================================================================
     // STATE MACHINE
-    // =========================================================================
     localparam S_IDLE       = 3'd0;
     localparam S_LOAD_NOISE = 3'd1;
     localparam S_PROCESS    = 3'd2;
@@ -76,24 +65,17 @@ module fc_layer_handler #(
     localparam S_DONE       = 3'd4;
     
     reg [2:0] state;
-    
-    // =========================================================================
     // PROCESSING COUNTERS
-    // =========================================================================
     reg [7:0]  output_group;     // Which group of 4 outputs (0 to 127)
     reg [4:0]  input_idx;        // Which input being sent (0 to 23)
     reg [9:0]  total_outputs;    // Total outputs generated
     
-    // =========================================================================
+    
     // READY SIGNAL
-    // =========================================================================
     assign noise_ready = (state == S_LOAD_NOISE);
     
-    // =========================================================================
     // MAIN STATE MACHINE
-    // =========================================================================
     integer i;
-    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state          <= S_IDLE;
@@ -199,5 +181,4 @@ module fc_layer_handler #(
             endcase
         end
     end
-
 endmodule

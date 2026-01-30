@@ -43,7 +43,6 @@ module activation_layer #(
                 .in_data  (col_in[(i+1)*ACC_WIDTH-1 : i*ACC_WIDTH]), 
                 .in_valid (col_valid_in[i]),
                 
-                // [BARU] Mapping Bias Per Kolom
                 // Mengambil irisan 16-bit yang sesuai untuk kolom ke-i
                 .bias     (bias_in[(i+1)*DATA_WIDTH-1 : i*DATA_WIDTH]),
                 

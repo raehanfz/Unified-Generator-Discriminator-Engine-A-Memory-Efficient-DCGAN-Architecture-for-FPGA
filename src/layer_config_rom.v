@@ -20,7 +20,7 @@
 
 module layer_config_rom (
     input  wire [3:0] layer_id,     // 0-8 for 9 layers
-    
+
     // Weight/Bias ROM addresses
     output reg [14:0] weight_base,   // Start address for weights
     output reg [14:0] bias_base,     // Start address for biases
@@ -50,19 +50,7 @@ module layer_config_rom (
     // For FC layer: special dimensions
     output reg [9:0]  fc_input_len,  // 24 for G_FC
     output reg [9:0]  fc_output_len  // 512 for G_FC
-);
-
-    // Cumulative offsets
-    // G_FC:  weights @ 0,     biases @ 12288
-    // G_L0:  weights @ 12800, biases @ 22016
-    // G_L1:  weights @ 22048, biases @ 26656
-    // G_L2:  weights @ 26672, biases @ 27824
-    // G_L3:  weights @ 27832, biases @ 28048
-    // D_L0:  weights @ 28051, biases @ 28243
-    // D_L1:  weights @ 28247, biases @ 28759
-    // D_L2:  weights @ 28767, biases @ 30815
-    // D_L3:  weights @ 30831, biases @ 31087
-    
+);    
     always @(*) begin
         // Defaults
         weight_base    = 15'd0;
@@ -85,9 +73,7 @@ module layer_config_rom (
         fc_output_len  = 10'd0;
         
         case (layer_id)
-            // =============================================================
             // GENERATOR LAYERS
-            // =============================================================
             4'd0: begin  // G_FC - Fully Connected
                 weight_base    = 15'd0;
                 bias_base      = 15'd12288;
@@ -185,9 +171,9 @@ module layer_config_rom (
                 activation     = 2'd3;       // Tanh (maps to linear, software post-process)
             end
             
-            // =============================================================
+            
             // DISCRIMINATOR LAYERS
-            // =============================================================
+            
             4'd5: begin  // D_L0 - Conv 3→4, 4×4 stride 2 @ 32×32
                 weight_base    = 15'd28051;
                 bias_base      = 15'd28243;
@@ -265,7 +251,6 @@ module layer_config_rom (
             end
             
             default: begin
-                // Invalid layer - all zeros (defaults above)
             end
         endcase
     end

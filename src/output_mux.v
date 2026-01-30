@@ -18,48 +18,33 @@ module output_mux #(
     input  wire clk,
     input  wire rst_n,
     
-    // =========================================================================
     // SELECTION
-    // =========================================================================
     input  wire [1:0] sel,  // 0=RAM, 1=Framebuffer, 2=Discriminator
     
-    // =========================================================================
     // INPUT (from systolic engine serializer)
-    // =========================================================================
     input  wire signed [DATA_WIDTH-1:0] s_axis_tdata,
     input  wire                         s_axis_tvalid,
     output wire                         s_axis_tready,
     
-    // =========================================================================
     // OUTPUT 0: To stream_to_ram (pingpong RAM)
-    // =========================================================================
     output wire signed [DATA_WIDTH-1:0] m0_axis_tdata,
     output wire                         m0_axis_tvalid,
     input  wire                         m0_axis_tready,
     
-    // =========================================================================
     // OUTPUT 1: To output_framebuffer
-    // =========================================================================
     output wire signed [DATA_WIDTH-1:0] m1_axis_tdata,
     output wire                         m1_axis_tvalid,
     input  wire                         m1_axis_tready,
     
-    // =========================================================================
     // OUTPUT 2: Discriminator result (single value)
-    // =========================================================================
     output reg  signed [DATA_WIDTH-1:0] disc_result,
     output reg                          disc_result_valid
 );
-
-    // =========================================================================
-    // DATA ROUTING (directly pass through)
-    // =========================================================================
+    // DATA ROUTING (directly pass through)  
     assign m0_axis_tdata = s_axis_tdata;
     assign m1_axis_tdata = s_axis_tdata;
     
-    // =========================================================================
     // VALID ROUTING (only selected output gets valid)
-    // =========================================================================
     assign m0_axis_tvalid = (sel == 2'd0) ? s_axis_tvalid : 1'b0;
     assign m1_axis_tvalid = (sel == 2'd1) ? s_axis_tvalid : 1'b0;
     
@@ -77,18 +62,15 @@ module output_mux #(
         end
     end
     
-    // =========================================================================
     // READY ROUTING (only selected output's ready propagates back)
-    // =========================================================================
     assign s_axis_tready = (sel == 2'd0) ? m0_axis_tready :
                            (sel == 2'd1) ? m1_axis_tready :
                            (sel == 2'd2) ? 1'b1 :  // Always ready for disc output
                            1'b0;
     
-    // =========================================================================
+    
     // DISCRIMINATOR OUTPUT CAPTURE
     // Latches the result - stays valid until next inference starts
-    // =========================================================================
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             disc_result       <= 0;
@@ -100,8 +82,6 @@ module output_mux #(
                 disc_result_valid <= 1;
                 $display("[DISC] Captured result: %0d (0x%04h)", $signed(s_axis_tdata), s_axis_tdata);
             end
-            // Note: disc_result_valid stays high until reset
-            // In real usage, controller would clear it when starting new inference
         end
     end
 
